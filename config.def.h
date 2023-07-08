@@ -36,6 +36,20 @@ static char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 /* logging */
 static int log_level = WLR_ERROR;
 
+/* Autostart */
+static const char *const autostart[] = {
+        "setbg", NULL,
+        "dunst", NULL,
+        "mpris_listen", NULL,
+        "systemctl", "--user", "import-environment", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", NULL,
+        "foot", "-s", NULL,
+        "cherrytree",  NULL,
+        "rnote", "Documents/japanese/kanj/kanji-practice.rnote", NULL,
+        "foliate", "Documents/books/kanji_1.epub", NULL,
+        NULL /* terminate */
+};
+
+
 static const Rule rules[] = {
 	/* app_id     title       tags mask     isfloating   monitor */
 	/* examples: */
