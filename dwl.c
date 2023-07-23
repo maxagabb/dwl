@@ -388,6 +388,7 @@ static Monitor *xytomon(double x, double y);
 static void xytonode(double x, double y, struct wlr_surface **psurface,
 		Client **pc, LayerSurface **pl, double *nx, double *ny);
 static void zoom(const Arg *arg);
+static void regions(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
@@ -3395,6 +3396,33 @@ zoom(const Arg *arg)
 
 	focusclient(sel, 1);
 	arrange(selmon);
+}
+
+void
+regions(const Arg *arg)
+{
+	int pipefd[2];
+	Client *c;
+	Monitor *m;
+
+	if (pipe(pipefd) == -1)
+		return;
+	if (fork() == 0) {
+		close(pipefd[1]);
+		dup2(pipefd[0], STDIN_FILENO);
+		close(pipefd[0]);
+		setsid();
+		execvp(((char **)arg->v)[0], (char **)arg->v);
+		die("dwl: execvp %s failed:", ((char **)arg->v)[0]);
+	}
+
+	close(pipefd[0]);
+	wl_list_for_each(m, &mons, link)
+		wl_list_for_each(c, &clients, link)
+			if (VISIBLEON(c, m))
+				dprintf(pipefd[1], "%d,%d %dx%d\n",
+				        c->geom.x, c->geom.y, c->geom.width, c->geom.height);
+	close(pipefd[1]);
 }
 
 #ifdef XWAYLAND
