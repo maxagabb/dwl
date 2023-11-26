@@ -3065,14 +3065,18 @@ urgent(struct wl_listener *listener, void *data)
 void
 view(const Arg *arg)
 {
+	Monitor *m;
 	if (!selmon || (arg->ui & TAGMASK) == selmon->tagset[selmon->seltags])
 		return;
-	selmon->seltags ^= 1; /* toggle sel tagset */
-	if (arg->ui & TAGMASK)
-		selmon->tagset[selmon->seltags] = arg->ui & TAGMASK;
-	focusclient(focustop(selmon), 1);
-	arrange(selmon);
-	printstatus();
+
+  wl_list_for_each(m, &mons, link) {
+    m->seltags ^= 1; /* toggle sel tagset */
+    if (arg->ui & TAGMASK)
+      m->tagset[m->seltags] = arg->ui & TAGMASK;
+    arrange(m);
+  }
+  focusclient(focustop(selmon), 0);
+  printstatus();
 }
 
 void
