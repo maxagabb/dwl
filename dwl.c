@@ -2690,7 +2690,9 @@ setup(void)
 
 	int i, sig[] = {SIGCHLD, SIGINT, SIGTERM, SIGPIPE};
 	struct sigaction sa = {.sa_flags = SA_RESTART, .sa_handler = handlesig};
+	char cursorsize_str[3];
 	sigemptyset(&sa.sa_mask);
+	sprintf(cursorsize_str, "%d", cursorsize);
 
 	for (i = 0; i < (int)LENGTH(sig); i++)
 		sigaction(sig[i], &sa, NULL);
@@ -2828,8 +2830,8 @@ setup(void)
 	 * Xcursor themes to source cursor images from and makes sure that cursor
 	 * images are available at all scale factors on the screen (necessary for
 	 * HiDPI support). Scaled cursors will be loaded with each output. */
-	cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
-	setenv("XCURSOR_SIZE", "24", 1);
+	cursor_mgr = wlr_xcursor_manager_create(cursortheme, cursorsize);
+	setenv("XCURSOR_SIZE", cursorsize_str, 1);
 
 	/*
 	 * wlr_cursor *only* displays an image on screen. It does not move around
