@@ -1,6 +1,7 @@
 /*
  * See LICENSE file for copyright and license details.
  */
+#include <fcntl.h>
 #include <getopt.h>
 #include <libinput.h>
 #include <linux/input-event-codes.h>
@@ -307,6 +308,8 @@ static void destroysessionmgr(struct wl_listener *listener, void *data);
 static Monitor *dirtomon(enum wlr_direction dir);
 static void drawbar(Monitor *m);
 static void drawbars(void);
+static int fifo_in(int fd, uint32_t mask, void *data);
+static void fifo_setup(void);
 static void focusclient(Client *c, int lift);
 static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
@@ -447,6 +450,9 @@ static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
 static struct wl_list mons;
 static Monitor *selmon;
+static int32_t fifo_fd;
+static struct wl_event_source *fifo_source;
+static char *fifo_path;
 
 static struct fcft_font *font;
 static int bh;
@@ -836,6 +842,9 @@ cleanup(void)
 
     fcft_destroy(font);
     fcft_fini();
+    close(fifo_fd);
+    unlink(fifo_path);
+    free(fifo_path);
 }
 
 void
@@ -1501,6 +1510,66 @@ drawbars(void)
 
 	wl_list_for_each(m, &mons, link)
 		drawbar(m);
+}
+
+int fifo_in(int fd, uint32_t mask, void *data) {
+    FILE *fifo_file;
+    size_t size;
+    char *line, *command;
+		Arg execute;
+
+    if (mask & WL_EVENT_ERROR) {
+        wl_event_source_remove(fifo_source);
+        close(fifo_fd);
+        unlink(fifo_path);
+        free(fifo_path);
+
+        fifo_fd = -1;
+        fifo_path = NULL;
+        return 0;
+    }
+
+    fifo_file = fdopen(dup(fd), "r");
+    size = 0;
+    line = NULL;
+    while (true) {
+        if (getline(&line, &size, fifo_file) == -1) break;
+
+        if (!line) continue;
+        command = strdup(line);
+        command[strcspn(command, "\n")] = 0;
+				execute.v = (const char*[]){ "/bin/sh", "-c", command, NULL };
+        spawn(&execute);      
+        free(command);
+    }
+    free(line);
+    fclose(fifo_file);
+
+    return 0;
+}
+
+void fifo_setup(void) {
+    size_t len;
+    const char *runtime_path = getenv("XDG_RUNTIME_DIR");
+    if (!runtime_path) die("runtime_path");
+
+    for (int i = 0; i < 100; i++) {
+        len = snprintf(NULL, 0, "%s/dwl-%d", runtime_path, i) + 1;
+        fifo_path = ecalloc(1, len);
+        snprintf(fifo_path, len, "%s/dwl-%d", runtime_path, i);
+
+        if (mkfifo(fifo_path, 0666) == -1) {
+            if (errno != EEXIST) die("mkfifo");
+            free(fifo_path);
+            continue;
+        }
+
+        if ((fifo_fd = open(fifo_path, O_CLOEXEC | O_RDWR | O_NONBLOCK)) == -1) die("fifo_fd == -1");
+
+        return;
+    }
+
+    die("fifo_setup");
 }
 
 void
@@ -2869,6 +2938,9 @@ setup(void)
 		fprintf(stderr, "failed to setup XWayland X server, continuing without it\n");
 	}
 #endif
+
+  fifo_setup();
+  fifo_source = wl_event_loop_add_fd(wl_display_get_event_loop(dpy), fifo_fd, WL_EVENT_READABLE, fifo_in, NULL);
 }
 
 void
