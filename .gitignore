@@ -3,4 +3,5 @@ dwl
 *-protocol.c
 *-protocol.h
 .ccls-cache
+.helix
 config.h
