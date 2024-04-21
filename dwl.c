@@ -1485,7 +1485,8 @@ drawbar(Monitor *mon)
 			urg & 1 << i ? &selbarfg : (sel ? &selbarbg : &normbarbg));
 
 		if (occ & 1 << i)
-			drwl_rect(pix, x + boxs, boxs, boxw, boxw, sel,
+			drwl_rect(pix, x + boxs, boxs, boxw, boxw,
+				mon == selmon && c && c->tags & 1 << i,
 				urg & 1 << i ? &selbarbg : (sel ? &selbarfg : &normbarfg));
 
 		x += w;
