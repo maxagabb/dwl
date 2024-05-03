@@ -213,6 +213,7 @@ struct Monitor {
 	int gappiv;           /* vertical gap between windows */
 	int gappoh;           /* horizontal outer gaps */
 	int gappov;           /* vertical outer gaps */
+	unsigned int hovered;
 	unsigned int seltags;
 	unsigned int sellt;
 	uint32_t tagset[2];
@@ -394,7 +395,7 @@ static void view(const Arg *arg);
 static void virtualkeyboard(struct wl_listener *listener, void *data);
 static void virtualpointer(struct wl_listener *listener, void *data);
 static Monitor *xytomon(double x, double y);
-static void xytonode(double x, double y, struct wlr_surface **psurface,
+static void xytonode(double x, double y, struct wlr_surface **psurface, struct wlr_scene_buffer **b,
 		Client **pc, LayerSurface **pl, double *nx, double *ny);
 static void zoom(const Arg *arg);
 static void regions(const Arg *arg);
@@ -724,12 +725,11 @@ buttonpress(struct wl_listener *listener, void *data)
 	wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
 
 	click = ClkRoot;
-	xytonode(cursor->x, cursor->y, NULL, &c, NULL, NULL, NULL);
+	xytonode(cursor->x, cursor->y, NULL, &buffer, &c, NULL, NULL, NULL);
 	if (c)
 		click = ClkClient;
 
-	if (!c && (node = wlr_scene_node_at(&layers[LyrBottom]->node, cursor->x, cursor->y, NULL, NULL)) &&
-		(buffer = wlr_scene_buffer_from_node(node)) && buffer == selmon->scene_buffer) {
+	if (!c && buffer == selmon->scene_buffer) {
 		x = selmon->m.x;
 		do
 			x += TEXTW(tags[i]);
@@ -1063,6 +1063,7 @@ createmon(struct wl_listener *listener, void *data)
 	wlr_output_state_init(&state);
 	/* Initialize monitor state using configured rules */
 	m->tagset[0] = m->tagset[1] = 1;
+	m->hovered = 5;
 	for (r = monrules; r < END(monrules); r++) {
 		if (!r->name || strstr(wlr_output->name, r->name)) {
 			m->m.x = r->x;
@@ -1436,7 +1437,7 @@ void
 drawbar(Monitor *mon)
 {
 	int x, w, tw = 0;
-	int sel;
+	int sel, lthov, monhov,stathov;
 	int boxs = font->height / 9;
 	int boxw = font->height / 6 + 2;
 	uint32_t i, occ = 0, urg = 0;
@@ -1458,13 +1459,17 @@ drawbar(Monitor *mon)
 	pix = pixman_image_create_bits(
 		PIXMAN_a8r8g8b8, mon->b.width, mon->b.height, buf->data, stride);
 
+	lthov = mon->hovered == 1;
+	monhov = mon->hovered == 2;
+	stathov = mon->hovered == 3;
+
 	/* draw status first so it can be overdrawn by tags later */
 	if (mon == selmon) {
 		if (stext[0] == '\0')
 			strncpy(stext, "dwl-"VERSION, sizeof(stext));
 		tw = TEXTW(stext) - lrpad;
 		drwl_text(pix, font, mon->b.width - tw, 0, tw, mon->b.height, 0,
-			stext, &normbarfg, &normbarbg);
+			stext, stathov ? &hovbarfg : &normbarfg, stathov ? &hovbarbg : &normbarbg);
 	}
 
 	wl_list_for_each(c, &clients, link) {
@@ -1494,19 +1499,19 @@ drawbar(Monitor *mon)
 
 	w = TEXTW(mon->ltsymbol);
 	x = drwl_text(pix, font, x, 0, w, mon->b.height, lrpad / 2,
-			mon->ltsymbol, &normbarfg, &normbarbg);
+			mon->ltsymbol,lthov ? &hovbarfg : &normbarfg, lthov ? &hovbarbg : &normbarbg);
 
 	if ((w = mon->b.width - tw - x) > mon->b.height) {
 		if (c != NULL) {
 			drwl_text(pix, font, x, 0, w, mon->b.height, lrpad / 2,
 				c ? client_get_title(c) : NULL,
-				mon == selmon ? &selbarfg : &normbarfg,
-				(mon == selmon && c) ? &selbarbg : &normbarbg);
+				mon == selmon ? monhov ? &hovbarfg : &selbarfg : &normbarfg,
+				(mon == selmon && c) ? monhov ? &hovbarbg : &seltibg : &normbarbg);
 			if (c && c->isfloating)
 				drwl_rect(pix, x + boxs, boxs, boxw, boxw, 0,
 					mon == selmon ? &selbarfg : &normbarfg);
 		} else {
-			drwl_rect(pix, x, 0, w, mon->b.height, 1, &normbarbg);
+			drwl_rect(pix, x, 0, w, mon->b.height, 1, monhov ? &hovbarbg : &normbarbg);
 		}
 	}
 
@@ -2132,6 +2137,38 @@ motionabsolute(struct wl_listener *listener, void *data)
 }
 
 void
+processhov(Client *c, struct wlr_scene_buffer *buffer){
+		unsigned int i = 0, x = 0;	
+
+		if (!c && selmon && buffer == selmon->scene_buffer) {
+			x = selmon->m.x;
+			do
+				x += TEXTW(tags[i]);
+			while (cursor->x >= x && ++i < LENGTH(tags));
+			if (i < LENGTH(tags)) {
+				if(selmon->hovered == 4) return;
+	      selmon->hovered = 4;
+			} else if (cursor->x < x + TEXTW(selmon->ltsymbol)){
+				if(selmon->hovered == 1) return;
+	      selmon->hovered = 1;			
+			}
+			else if (cursor->x > selmon->w.width - (int)TEXTW(stext)){
+				if(selmon->hovered == 3) return;
+	      selmon->hovered = 3;			
+			}
+			else{
+				if(selmon->hovered == 2) return;
+	      selmon->hovered = 2;			
+			}
+		}
+		else if (selmon) {
+			if(selmon->hovered == 4) return;
+	    selmon->hovered = 4;
+	  }
+		drawbar(selmon);
+}
+
+void
 motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double dy,
 		double dx_unaccel, double dy_unaccel)
 {
@@ -2139,6 +2176,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	Client *c = NULL, *w = NULL;
 	LayerSurface *l = NULL;
 	struct wlr_surface *surface = NULL;
+	struct wlr_scene_buffer *buffer = NULL;
 	struct wlr_pointer_constraint_v1 *constraint;
 
 	/* time is 0 in internal calls meant to restore pointer focus. */
@@ -2190,7 +2228,9 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	}
 
 	/* Find the client under the pointer and send the event along. */
-	xytonode(cursor->x, cursor->y, &surface, &c, NULL, &sx, &sy);
+	xytonode(cursor->x, cursor->y, &surface, &buffer, &c, NULL, &sx, &sy);
+
+	processhov(c, buffer);
 
 	if (cursor_mode == CurPressed && !seat->drag && surface != held_grab
 			&& toplevel_from_wlr_surface(held_grab, &w, &l) >= 0) {
@@ -2229,7 +2269,7 @@ moveresize(const Arg *arg)
 {
 	if (cursor_mode != CurNormal && cursor_mode != CurPressed)
 		return;
-	xytonode(cursor->x, cursor->y, NULL, &grabc, NULL, NULL, NULL);
+	xytonode(cursor->x, cursor->y, NULL, NULL, &grabc, NULL, NULL, NULL);
 	if (!grabc || client_is_unmanaged(grabc) || grabc->isfullscreen)
 		return;
 
@@ -3468,11 +3508,12 @@ xytomon(double x, double y)
 }
 
 void
-xytonode(double x, double y, struct wlr_surface **psurface,
+xytonode(double x, double y, struct wlr_surface **psurface,struct wlr_scene_buffer **b,
 		Client **pc, LayerSurface **pl, double *nx, double *ny)
 {
 	struct wlr_scene_node *node, *pnode;
 	struct wlr_surface *surface = NULL;
+	struct wlr_scene_buffer *buffer;
 	struct wlr_scene_surface *scene_surface = NULL;
 	Client *c = NULL;
 	LayerSurface *l = NULL;
@@ -3483,8 +3524,9 @@ xytonode(double x, double y, struct wlr_surface **psurface,
 			continue;
 
 		if (node->type == WLR_SCENE_NODE_BUFFER) {
-			scene_surface = wlr_scene_surface_try_from_buffer(
-					wlr_scene_buffer_from_node(node));
+			buffer = wlr_scene_buffer_from_node(node);
+			if(layer == LyrBottom) *b = buffer;
+			scene_surface = wlr_scene_surface_try_from_buffer(buffer);				
 			if (!scene_surface) continue;
 			surface = scene_surface->surface;
 		}

@@ -31,6 +31,8 @@ static pixman_color_t normbarfg = { 0xbbbb, 0xbbbb, 0xbbbb, 0xffff };
 static pixman_color_t normbarbg = { 0x2222, 0x2222, 0x2222, 0xffff };
 static pixman_color_t selbarfg  = { 0xeeee, 0xeeee, 0xeeee, 0xffff };
 static pixman_color_t selbarbg  = { 0x0000, 0x5555, 0x7777, 0xffff };
+static pixman_color_t hovbarfg  = { 0xeeee, 0xeeee, 0xeeee, 0xffff };
+static pixman_color_t hovbarbg  = { 0x0000, 0x5555, 0x7777, 0xffff };
 
 /* tagging - TAGCOUNT must be no greater than 31 */
 static char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
