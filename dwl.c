@@ -2140,7 +2140,7 @@ void
 processhov(Client *c, struct wlr_scene_buffer *buffer){
 		unsigned int i = 0, x = 0;	
 
-		if (!c && selmon && buffer == selmon->scene_buffer) {
+		if (!c && buffer != NULL) {
 			x = selmon->m.x;
 			do
 				x += TEXTW(tags[i]);
@@ -2230,8 +2230,6 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	/* Find the client under the pointer and send the event along. */
 	xytonode(cursor->x, cursor->y, &surface, &buffer, &c, NULL, &sx, &sy);
 
-	processhov(c, buffer);
-
 	if (cursor_mode == CurPressed && !seat->drag && surface != held_grab
 			&& toplevel_from_wlr_surface(held_grab, &w, &l) >= 0) {
 		c = w;
@@ -2243,8 +2241,13 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	/* If there's no client surface under the cursor, set the cursor image to a
 	 * default. This is what makes the cursor image appear when you move it
 	 * off of a client or over its border. */
-	if (!surface && !seat->drag)
+	if (!surface && !seat->drag){
 		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+		processhov(c, buffer);
+	} else if (selmon->hovered != 4) {
+		selmon->hovered = 4;
+		drawbar(selmon);  
+  }
 
 	pointerfocus(c, surface, sx, sy, time);
 }
@@ -3525,7 +3528,10 @@ xytonode(double x, double y, struct wlr_surface **psurface,struct wlr_scene_buff
 
 		if (node->type == WLR_SCENE_NODE_BUFFER) {
 			buffer = wlr_scene_buffer_from_node(node);
-			if(layer == LyrBottom) *b = buffer;
+			if(buffer ==  selmon->scene_buffer){
+				*b = buffer;				
+				continue;
+			}
 			scene_surface = wlr_scene_surface_try_from_buffer(buffer);				
 			if (!scene_surface) continue;
 			surface = scene_surface->surface;
